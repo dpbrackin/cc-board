@@ -171,12 +171,13 @@ func ResumeCommand(tmpl, id string) string {
 	return strings.ReplaceAll(tmpl, "{id}", shellQuote(id))
 }
 
-// WindowName shortens a title for use as a tmux window name.
+// WindowName shortens a title to at most 20 characters for use as a tmux
+// window name. It adds no ellipsis: tmux shows non-ASCII as "_" in some locales.
 func WindowName(title string) string {
 	title = strings.Join(strings.Fields(title), " ")
 	r := []rune(title)
 	if len(r) > 20 {
-		return strings.TrimSpace(string(r[:19])) + "…"
+		return strings.TrimSpace(string(r[:20]))
 	}
 	return title
 }

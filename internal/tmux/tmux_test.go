@@ -42,7 +42,7 @@ func TestJump(t *testing.T) {
 			name:    "closed: pane gone",
 			inTmux:  true,
 			target:  Target{ID: "abc", CWD: dir, Pane: "%3", Title: "A very long title that needs shortening"},
-			want:    []string{"display-message -p -t %3 #{pane_current_command}", "new-window -c " + dir + " -n A very long title t… claude --resume abc"},
+			want:    []string{"display-message -p -t %3 #{pane_current_command}", "new-window -c " + dir + " -n A very long title th claude --resume abc"},
 			outcome: NewWindow,
 		},
 		{
