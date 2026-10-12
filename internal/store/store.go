@@ -42,6 +42,17 @@ type Meta struct {
 // IsZero reports whether m carries no user data.
 func (m Meta) IsZero() bool { return m == Meta{} }
 
+// Progress is the content of progress/<session_id>.json, written by
+// `cc-board progress` (usually run by Claude itself). Percent is always set;
+// Done and Total are set when progress was reported as a fraction.
+type Progress struct {
+	Percent   int       `json:"percent"`
+	Done      int       `json:"done,omitempty"`
+	Total     int       `json:"total,omitempty"`
+	Note      string    `json:"note,omitempty"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
 // Store addresses the board directory.
 type Store struct {
 	Dir string // <claude_dir>/board
@@ -55,6 +66,9 @@ func (s *Store) SessionsDir() string { return filepath.Join(s.Dir, "sessions") }
 
 // MetaDir is <board>/meta.
 func (s *Store) MetaDir() string { return filepath.Join(s.Dir, "meta") }
+
+// ProgressDir is <board>/progress.
+func (s *Store) ProgressDir() string { return filepath.Join(s.Dir, "progress") }
 
 // LogPath is <board>/hook.log.
 func (s *Store) LogPath() string { return filepath.Join(s.Dir, "hook.log") }
@@ -132,6 +146,42 @@ func (s *Store) ReadAllMeta() (map[string]Meta, error) {
 		var m Meta
 		if ok, err := readJSON(path, &m); ok && err == nil {
 			out[id] = m
+		}
+	})
+	return out, err
+}
+
+func (s *Store) progressPath(id string) string {
+	return filepath.Join(s.ProgressDir(), id+".json")
+}
+
+// WriteProgress atomically writes the progress file for id.
+func (s *Store) WriteProgress(id string, p Progress) error {
+	if !ValidID(id) {
+		return errors.New("store: invalid session id")
+	}
+	return writeJSON(s.progressPath(id), p)
+}
+
+// DeleteProgress removes the progress file for id. A missing file is not an error.
+func (s *Store) DeleteProgress(id string) error {
+	if !ValidID(id) {
+		return errors.New("store: invalid session id")
+	}
+	err := os.Remove(s.progressPath(id))
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	return err
+}
+
+// ReadAllProgress reads every progress file. Unreadable files are skipped.
+func (s *Store) ReadAllProgress() (map[string]Progress, error) {
+	out := map[string]Progress{}
+	err := readDir(s.ProgressDir(), func(id, path string) {
+		var p Progress
+		if ok, err := readJSON(path, &p); ok && err == nil {
+			out[id] = p
 		}
 	})
 	return out, err

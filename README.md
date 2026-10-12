@@ -2,7 +2,8 @@
 
 A board for all your Claude Code sessions. `cc-board` lists every session on the
 machine in one terminal UI, grouped by project, with live status (needs you,
-working, idle, closed) and todo progress. Press enter on a row to go to that
+working, idle, closed) and progress, either reported by the session itself or
+read from Claude's task list. Press enter on a row to go to that
 session: it switches to the session's tmux pane, or, if the session has closed,
 resumes it in a new tmux window.
 
@@ -10,7 +11,7 @@ resumes it in a new tmux window.
  cc-board                         1 needs you · 2 working · 4 idle · 6 closed
  ─────────────────────────────────────────────────────────────────────────────
  api  ~/projects/api
- ● needs you   Add rate limiting to /login          ███░░  3/5    just now
+ ● needs you   Add rate limiting · writing tests    ███░░  60%    just now
  ◐ working     Fix flaky integration tests          █░░░░  1/4    2m ago
  web  ~/projects/web
  ○ idle        Migrate settings page to new forms   █████  6/6    18m ago  done?
@@ -68,7 +69,35 @@ bind-key C display-popup -E -w 80% -h 80% cc-board
 
 Then run `tmux source-file ~/.tmux.conf`. `prefix C` opens the board from any pane.
 
-### 3. Restart running Claude Code sessions
+### 3. Let Claude report progress (optional)
+
+Without this, the progress bar comes from Claude's own task list, so it only
+appears for multi-step work. To have every session report progress itself,
+add this to `~/.claude/CLAUDE.md`:
+
+```markdown
+## Progress reporting
+For multi-step work, report progress with `cc-board progress <percent> <short note>`,
+for example `cc-board progress 40 writing tests`. Report when you start, after each
+meaningful step, and `cc-board progress 100 done` when finished. Keep notes under
+60 characters.
+```
+
+And allow the command without a permission prompt each time, in the
+`permissions` section of `~/.claude/settings.json`:
+
+```json
+{
+  "permissions": {
+    "allow": ["Bash(cc-board progress:*)"]
+  }
+}
+```
+
+Each report is one tool call, so it costs Claude a little time and context.
+That is why the instruction asks for meaningful steps, not every action.
+
+### 4. Restart running Claude Code sessions
 
 Running sessions only pick up the hooks after a restart. Sessions that
 started before the hooks were installed show as `closed`, using transcript data
@@ -81,6 +110,8 @@ only.
 | `cc-board` | Open the TUI |
 | `cc-board hook` | Called by Claude Code hooks; reads event JSON on stdin |
 | `cc-board list [-a]` | Print sessions as plain text (`-a` includes hidden and old closed ones) |
+| `cc-board progress <N \| N% \| DONE/TOTAL> [note...]` | Report progress for the current session |
+| `cc-board progress -clear` | Remove reported progress for the current session |
 | `cc-board version` | Print version |
 
 All commands accept `-config <path>`.
@@ -108,7 +139,28 @@ Statuses:
 - **closed**: the session has ended, its pane is gone or now runs something
   else, or it has no status file.
 
-A dim `done?` means every todo is complete and the session is idle.
+### Progress
+
+The bar shows progress the session reported with `cc-board progress`, and
+the note after the title (`Add rate limiting · writing tests`). A session that
+never reports falls back to its task list: completed tasks over total. If it has
+neither, the column is blank.
+
+`cc-board progress` works out which session is calling from `$TMUX_PANE`,
+matched against the pane the hook recorded. Outside tmux it uses the session
+whose directory contains the current directory (the deepest match wins). To
+report for a specific session, pass `-session <id>` before the value:
+
+```sh
+cc-board progress 40 writing tests
+cc-board progress 3/5 "wiring up the API"
+cc-board progress -session 1f2e… 100 done
+cc-board progress -clear
+```
+
+Reported progress stays until it is replaced or cleared.
+
+A dim `done?` means progress is at 100% and the session is idle.
 
 Outside tmux, jumping to a live pane is not possible. Resume and open still
 work: the TUI exits and replaces itself with the resume command or `$SHELL`,
@@ -143,6 +195,7 @@ default.
 | --- | --- | --- |
 | `~/.claude/board/sessions/<id>.json` | hook | status, cwd, tmux pane, timestamps |
 | `~/.claude/board/meta/<id>.json` | TUI | your label, done and hidden flags |
+| `~/.claude/board/progress/<id>.json` | `cc-board progress` | reported percent, optional done/total, note, timestamp |
 | `~/.claude/board/hook.log` | hook | errors only |
 
 You can delete the board folder at any time. It is rebuilt as events arrive.

@@ -10,6 +10,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/mattn/go-runewidth"
+
 	"github.com/dpbrackin/cc-board/internal/session"
 	"github.com/dpbrackin/cc-board/internal/store"
 	"github.com/dpbrackin/cc-board/internal/tmux"
@@ -385,5 +387,30 @@ func TestViewRenders(t *testing.T) {
 	}
 	if n := strings.Count(v, "\n") + 1; n != 30 {
 		t.Errorf("view has %d lines, want 30", n)
+	}
+}
+
+func TestTitleAndNote(t *testing.T) {
+	tests := []struct {
+		title, note string
+		w           int
+		wantTitle   string
+		wantNote    string
+	}{
+		{"Fix tests", "", 20, "Fix tests           ", ""},
+		{"Fix tests", "writing fixtures", 30, "Fix tests", " · writing fixtures  "},
+		{"Fix tests", "a very long progress note here", 24, "Fix tests", " · a very long…"},
+		{"A rather long task title here", "note", 20, "A rather lon…", " · note"},
+		{"A rather long task title", "short", 30, "A rather long task ti…", " · short"},
+		{"Title", "note", 6, "Title ", ""},
+	}
+	for _, tt := range tests {
+		gotT, gotN := titleAndNote(tt.title, tt.note, tt.w)
+		if gotT != tt.wantTitle || gotN != tt.wantNote {
+			t.Errorf("titleAndNote(%q, %q, %d) = %q, %q; want %q, %q", tt.title, tt.note, tt.w, gotT, gotN, tt.wantTitle, tt.wantNote)
+		}
+		if w := runewidth.StringWidth(gotT + gotN); w != tt.w {
+			t.Errorf("titleAndNote(%q, %q, %d): width %d", tt.title, tt.note, tt.w, w)
+		}
 	}
 }

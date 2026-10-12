@@ -40,8 +40,9 @@ type Session struct {
 	Live           bool
 	TodoDone       int
 	TodoTotal      int
-	LastActivity   time.Time // transcript last timestamp (or mtime)
-	UpdatedAt      time.Time // max(status updated_at, LastActivity), used for sorting
+	Reported       *store.Progress // set by `cc-board progress`; overrides the todo ratio
+	LastActivity   time.Time       // transcript last timestamp (or mtime)
+	UpdatedAt      time.Time       // max(status updated_at, LastActivity), used for sorting
 	Done           bool
 	Hidden         bool
 	CWDMissing     bool
@@ -57,13 +58,62 @@ func (s Session) Project() string {
 	return filepath.Base(s.CWD)
 }
 
-// HasProgress reports whether the session has a todo list.
-func (s Session) HasProgress() bool { return s.TodoTotal > 0 }
+// HasProgress reports whether the session has reported progress or a todo list.
+func (s Session) HasProgress() bool { return s.Reported != nil || s.TodoTotal > 0 }
 
-// DoneHint reports whether to show the dim "done?" hint: every todo is
-// complete, the session is idle, and the user hasn't marked it done.
+// Percent returns progress as 0–100: the reported value when there is one,
+// otherwise the todo ratio. It is 0 when there is no progress.
+func (s Session) Percent() int {
+	if s.Reported != nil {
+		return s.Reported.Percent
+	}
+	if s.TodoTotal > 0 {
+		return s.TodoDone * 100 / s.TodoTotal
+	}
+	return 0
+}
+
+// ProgressLabel is the text next to the bar: "3/5" for a fraction (reported
+// or from todos), "60%" for a reported percentage, "" for none.
+func (s Session) ProgressLabel() string {
+	switch {
+	case s.Reported != nil && s.Reported.Total > 0:
+		return fmt.Sprintf("%d/%d", s.Reported.Done, s.Reported.Total)
+	case s.Reported != nil:
+		return fmt.Sprintf("%d%%", s.Reported.Percent)
+	case s.TodoTotal > 0:
+		return fmt.Sprintf("%d/%d", s.TodoDone, s.TodoTotal)
+	}
+	return ""
+}
+
+// Note is the reported progress note, if any.
+func (s Session) Note() string {
+	if s.Reported == nil {
+		return ""
+	}
+	return s.Reported.Note
+}
+
+// DoneHint reports whether to show the dim "done?" hint: progress is at 100%,
+// the session is idle, and the user hasn't marked it done.
 func (s Session) DoneHint() bool {
-	return !s.Done && s.Status == Idle && s.TodoTotal > 0 && s.TodoDone == s.TodoTotal
+	return !s.Done && s.Status == Idle && s.HasProgress() && s.Percent() == 100
+}
+
+// ApplyProgress attaches reported progress to sessions. A report also counts
+// as activity, so it can move UpdatedAt forward.
+func ApplyProgress(sessions []Session, progress map[string]store.Progress) {
+	for i := range sessions {
+		p, ok := progress[sessions[i].ID]
+		if !ok {
+			continue
+		}
+		sessions[i].Reported = &p
+		if p.UpdatedAt.After(sessions[i].UpdatedAt) {
+			sessions[i].UpdatedAt = p.UpdatedAt
+		}
+	}
 }
 
 // LiveFunc reports whether a tmux pane is live (exists and runs Claude).
@@ -79,7 +129,8 @@ type DirExistsFunc func(dir string) bool
 //  3. Status comes from the status file; none means closed.
 //  4. Live only if status is not ended, a pane is set, and live(pane) is true;
 //     otherwise the session displays as closed.
-//  5. Progress = completed/total of the latest todo list.
+//  5. Progress = completed/total of the latest todo list; ApplyProgress
+//     replaces it with progress the session reported itself.
 //  6. Done = meta done.
 func Merge(infos []transcript.Info, statuses map[string]store.Status, metas map[string]store.Meta, live LiveFunc, dirExists DirExistsFunc) []Session {
 	if dirExists == nil {
@@ -303,5 +354,11 @@ func (l *Loader) Load() ([]Session, error) {
 	if err != nil {
 		return nil, err
 	}
-	return Merge(infos, statuses, metas, l.Live, nil), nil
+	progress, err := l.Store.ReadAllProgress()
+	if err != nil {
+		return nil, err
+	}
+	sessions := Merge(infos, statuses, metas, l.Live, nil)
+	ApplyProgress(sessions, progress)
+	return sessions, nil
 }

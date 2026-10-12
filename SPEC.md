@@ -162,6 +162,15 @@ The transcript format is internal to Claude Code and may change. The parser must
 
 If `cc-board` is not on the PATH Claude Code sees, use the absolute path, e.g. `~/go/bin/cc-board hook`.
 
+## Reported progress
+
+Added after v1. A session can report its own progress, which overrides the todo ratio.
+
+- `cc-board progress [-session id] <N | N% | DONE/TOTAL> [note...]` writes `~/.claude/board/progress/<session_id>.json` with `percent`, optional `done`/`total`, `note` (cut to 80 characters) and `updated_at`. `-clear` removes the file.
+- The calling session is found from `$TMUX_PANE`, matched to `tmux_pane` in the status files (most recent non-ended match wins). Outside tmux it falls back to the non-ended session whose `cwd` contains the current directory, deepest match first. `-session` overrides both.
+- Merge: reported progress, when present, sets the bar and label (`60%` or `3/5`) and appends ` · <note>` to the title; otherwise the todo ratio is used. A report also counts as activity for sorting. `done?` shows when progress is 100% and the session is idle.
+- Claude is asked to report via a CLAUDE.md instruction, with `Bash(cc-board progress:*)` in `permissions.allow` so reports don't prompt.
+
 ## TUI
 
 The TUI is one Bubble Tea program: a header with counts, a list of sessions grouped by project, an optional preview pane, and a one-line help footer.

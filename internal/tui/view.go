@@ -12,7 +12,7 @@ import (
 
 const (
 	badgeWidth    = 11 // "● needs you"
-	progressWidth = 11 // "█████  6/6"
+	progressWidth = 12 // "█████  100%" or "█████  12/20"
 	timeWidth     = 8
 	hintWidth     = 5
 	barCells      = 5
@@ -121,8 +121,8 @@ func (m Model) sessionLine(s session.Session, w int, selected bool) string {
 	badgeText := pad(bd.icon+" "+bd.label, badgeWidth)
 	progress := ""
 	if s.HasProgress() {
-		filled := s.TodoDone * barCells / s.TodoTotal
-		progress = strings.Repeat("█", filled) + strings.Repeat("░", barCells-filled) + fmt.Sprintf("  %d/%d", s.TodoDone, s.TodoTotal)
+		filled := s.Percent() * barCells / 100
+		progress = strings.Repeat("█", filled) + strings.Repeat("░", barCells-filled) + "  " + s.ProgressLabel()
 	}
 	progress = pad(progress, progressWidth)
 	rel := pad(session.RelTime(s.UpdatedAt, now), timeWidth)
@@ -137,24 +137,24 @@ func (m Model) sessionLine(s session.Session, w int, selected bool) string {
 	if titleW < 10 {
 		titleW = 10
 	}
-	title := s.Title
-	if m.mode == modeRename && m.renaming == s.ID {
+	renaming := m.mode == modeRename && m.renaming == s.ID
+	title, note := s.Title, ""
+	if renaming {
 		m.input.Width = titleW - 1
-		title = m.input.View()
-		title = pad(title, titleW)
+		title = pad(m.input.View(), titleW)
 	} else {
-		title = pad(runewidth.Truncate(title, titleW, "…"), titleW)
+		title, note = titleAndNote(s.Title, s.Note(), titleW)
 	}
 
-	if selected && !(m.mode == modeRename && m.renaming == s.ID) {
-		line := " " + badgeText + "  " + title + "  " + progress + "  " + rel + "  " + hint + " "
+	if selected && !renaming {
+		line := " " + badgeText + "  " + title + note + "  " + progress + "  " + rel + "  " + hint + " "
 		return styleSelected.Render(line)
 	}
 	titleStyle := lipgloss.NewStyle()
 	if s.Status == session.Closed || s.Done {
 		titleStyle = styleClosed
 	}
-	return " " + bd.style.Render(badgeText) + "  " + titleStyle.Render(title) + "  " + progress + "  " +
+	return " " + bd.style.Render(badgeText) + "  " + titleStyle.Render(title) + styleDim.Render(note) + "  " + progress + "  " +
 		styleDim.Render(rel) + "  " + styleDim.Render(hint) + " "
 }
 
@@ -179,6 +179,32 @@ func (m Model) footer(w int) string {
 		help = "not in tmux: live jump unavailable · " + help
 	}
 	return " " + styleDim.Render(runewidth.Truncate(help, w-2, "…"))
+}
+
+// titleAndNote fits the title and an optional progress note into w cells.
+// The note follows the title after " · " and takes the room the title doesn't
+// need, but the title always keeps at least half the column. The two returned
+// strings together are exactly w cells wide.
+func titleAndNote(title, note string, w int) (string, string) {
+	const sep = " · "
+	sepW := runewidth.StringWidth(sep)
+	if note == "" {
+		return pad(runewidth.Truncate(title, w, "…"), w), ""
+	}
+	room := w - sepW - runewidth.StringWidth(note)
+	if room < w/2 {
+		room = w / 2
+	}
+	short := title
+	if runewidth.StringWidth(short) > room {
+		short = runewidth.Truncate(short, room, "…")
+	}
+	noteW := w - runewidth.StringWidth(short)
+	if noteW < sepW+3 {
+		// Too narrow for a useful note: give the whole column to the title.
+		return pad(runewidth.Truncate(title, w, "…"), w), ""
+	}
+	return short, pad(runewidth.Truncate(sep+note, noteW, "…"), noteW)
 }
 
 // pad pads s with spaces to display width n (it never truncates styled text).

@@ -211,3 +211,48 @@ func TestCount(t *testing.T) {
 		t.Errorf("got %+v", c)
 	}
 }
+
+func TestApplyProgress(t *testing.T) {
+	later := t0.Add(time.Hour)
+	sessions := []Session{
+		{ID: "reported", Status: Idle, TodoDone: 1, TodoTotal: 4, UpdatedAt: t0},
+		{ID: "todos", Status: Idle, TodoDone: 2, TodoTotal: 4, UpdatedAt: t0},
+		{ID: "none", Status: Idle, UpdatedAt: t0},
+	}
+	ApplyProgress(sessions, map[string]store.Progress{
+		"reported": {Percent: 70, Note: "writing tests", UpdatedAt: later},
+	})
+	r, td, n := sessions[0], sessions[1], sessions[2]
+	if !r.HasProgress() || r.Percent() != 70 || r.ProgressLabel() != "70%" || r.Note() != "writing tests" {
+		t.Errorf("reported overrides todos: %d %q %q", r.Percent(), r.ProgressLabel(), r.Note())
+	}
+	if !r.UpdatedAt.Equal(later) {
+		t.Errorf("report should bump UpdatedAt, got %v", r.UpdatedAt)
+	}
+	if td.Percent() != 50 || td.ProgressLabel() != "2/4" || td.Note() != "" {
+		t.Errorf("todo fallback: %d %q", td.Percent(), td.ProgressLabel())
+	}
+	if n.HasProgress() || n.ProgressLabel() != "" || n.DoneHint() {
+		t.Errorf("no progress: %+v", n)
+	}
+}
+
+func TestProgressLabelAndDoneHint(t *testing.T) {
+	frac := Session{Status: Idle, Reported: &store.Progress{Percent: 100, Done: 5, Total: 5}}
+	if frac.ProgressLabel() != "5/5" || !frac.DoneHint() {
+		t.Errorf("reported fraction: %q hint=%v", frac.ProgressLabel(), frac.DoneHint())
+	}
+	// Reported 80% wins even though every todo is done.
+	partial := Session{Status: Idle, TodoDone: 3, TodoTotal: 3, Reported: &store.Progress{Percent: 80}}
+	if partial.DoneHint() {
+		t.Error("80% reported should not show done?")
+	}
+	working := Session{Status: Working, Reported: &store.Progress{Percent: 100}}
+	if working.DoneHint() {
+		t.Error("working session should not show done?")
+	}
+	marked := Session{Status: Idle, Done: true, Reported: &store.Progress{Percent: 100}}
+	if marked.DoneHint() {
+		t.Error("already-done session should not show done?")
+	}
+}
