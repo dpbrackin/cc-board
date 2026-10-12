@@ -1,0 +1,9 @@
+this is not json
+{"parentUuid":null,"isSidechain":false,"userType":"external","cwd":"/home/dev/projects/cli","sessionId":"44444444-4444-4444-8444-444444444444","version":"2.1.0","gitBranch":"main","type":"user","uuid":"00000000-0000-4000-8000-000000000034","timestamp":"2026-03-01T10:00:01.000Z","message":{"role":"user","content":"Upgrade to React 19"}}
+{"type":"assistant","message":{"content":
+
+["an","array"]
+{"type":"assistant","message":"not-an-object","timestamp":"bogus"}
+{"type":"user","message":{"role":"user","content":12345}}
+{"parentUuid":"00000000-0000-4000-8000-000000000034","isSidechain":false,"userType":"external","cwd":"/home/dev/projects/cli","sessionId":"44444444-4444-4444-8444-444444444444","version":"2.1.0","gitBranch":"main","type":"assistant","uuid":"00000000-0000-4000-8000-000000000035","timestamp":"2026-03-01T10:00:02.000Z","requestId":"req_test2","message":{"id":"msg_test2","type":"message","role":"assistant","model":"claude-test","content":[{"type":"tool_use","id":"toolu_bad","name":"TodoWrite","input":"not-an-object"}],"stop_reason":null,"stop_sequence":null}}
+{"parentUuid":"00000000-0000-4000-8000-000000000035","isSidechain":false,"userType":"external","cwd":"/home/dev/projects/cli","sessionId":"44444444-4444-4444-8444-444444444444","version":"2.1.0","gitBranch":"main","type":"assistant","uuid":"00000000-0000-4000-8000-000000000036","timestamp":"2026-03-01T10:00:03.000Z","requestId":"req_test3","message":{"id":"msg_test3","type":"message","role":"assistant","model":"claude-test","content":[{"type":"text","text":"Upgraded."},{"type":"some_future_block","data":1}],"stop_reason":null,"stop_sequence":null}}
