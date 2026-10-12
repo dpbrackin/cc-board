@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/dpbrackin/cc-board/internal/proc"
 	"github.com/dpbrackin/cc-board/internal/store"
 )
 
@@ -57,6 +58,10 @@ type Handler struct {
 	Now   func() time.Time
 	// TmuxPane is the value of $TMUX_PANE for this process.
 	TmuxPane string
+	// ClaudePID finds the Claude Code process that ran the hook. It is called
+	// only on SessionStart, or when no PID is recorded yet, to keep normal
+	// events cheap. It returns 0 when the process can't be found.
+	ClaudePID func() int
 }
 
 // Handle reads one event from r and updates the status file.
@@ -96,6 +101,11 @@ func (h *Handler) Handle(r io.Reader) error {
 	if h.TmuxPane != "" || ev.HookEventName == "SessionStart" {
 		st.TmuxPane = h.TmuxPane
 	}
+	if (ev.HookEventName == "SessionStart" || st.PID == 0) && h.ClaudePID != nil {
+		if pid := h.ClaudePID(); pid > 0 || ev.HookEventName == "SessionStart" {
+			st.PID = pid
+		}
+	}
 	st.Status = status
 	st.LastEvent = ev.HookEventName
 	if !exists || st.StartedAt.IsZero() || ev.HookEventName == "SessionStart" && cur.Status == store.StatusEnded {
@@ -114,13 +124,21 @@ func (h *Handler) now() time.Time {
 
 // Run is the entry point for `cc-board hook`. It never writes to stdout and
 // always returns normally; errors are appended to <board>/hook.log.
-func Run(boardDir string, stdin io.Reader) {
+// liveCommands are the process names that count as Claude Code.
+func Run(boardDir string, liveCommands []string, stdin io.Reader) {
 	defer func() {
 		if r := recover(); r != nil {
 			logError(boardDir, fmt.Errorf("panic: %v", r))
 		}
 	}()
-	h := &Handler{Store: store.New(boardDir), TmuxPane: os.Getenv("TMUX_PANE")}
+	h := &Handler{
+		Store:    store.New(boardDir),
+		TmuxPane: os.Getenv("TMUX_PANE"),
+		ClaudePID: func() int {
+			info, _ := proc.FindAncestor(nil, os.Getppid(), liveCommands)
+			return info.PID
+		},
+	}
 	if err := h.Handle(stdin); err != nil {
 		logError(boardDir, err)
 	}

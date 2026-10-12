@@ -26,6 +26,7 @@ type Status struct {
 	CWD            string    `json:"cwd"`
 	TranscriptPath string    `json:"transcript_path"`
 	TmuxPane       string    `json:"tmux_pane"`
+	PID            int       `json:"pid,omitempty"` // Claude Code process, for liveness outside tmux
 	Status         string    `json:"status"`
 	LastEvent      string    `json:"last_event"`
 	StartedAt      time.Time `json:"started_at"`

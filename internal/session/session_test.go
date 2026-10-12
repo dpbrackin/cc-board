@@ -15,7 +15,8 @@ func allDirs(string) bool { return true }
 
 func TestMerge(t *testing.T) {
 	livePanes := map[string]bool{"%1": true, "%2": true}
-	live := func(p string) bool { return livePanes[p] }
+	livePIDs := map[int]bool{77: true}
+	live := func(st store.Status) bool { return livePanes[st.TmuxPane] || livePIDs[st.PID] }
 	tests := []struct {
 		name   string
 		info   transcript.Info
@@ -28,6 +29,18 @@ func TestMerge(t *testing.T) {
 			name: "no status file is closed",
 			info: transcript.Info{SessionID: "a", FirstPrompt: "Prompt"},
 			want: func(s Session) bool { return s.Status == Closed && s.Title == "Prompt" && !s.Live },
+		},
+		{
+			name:   "live outside tmux via process",
+			info:   transcript.Info{SessionID: "a"},
+			status: &store.Status{SessionID: "a", Status: store.StatusNeedsInput, PID: 77},
+			want:   func(s Session) bool { return s.Status == NeedsInput && s.Live && s.PID == 77 && s.Pane == "" },
+		},
+		{
+			name:   "dead process outside tmux is closed",
+			info:   transcript.Info{SessionID: "a"},
+			status: &store.Status{SessionID: "a", Status: store.StatusWorking, PID: 78},
+			want:   func(s Session) bool { return s.Status == Closed && !s.Live },
 		},
 		{
 			name:   "live working",
@@ -112,7 +125,7 @@ func TestStatusWithoutTranscriptIgnored(t *testing.T) {
 
 func TestLiveNotCheckedForEnded(t *testing.T) {
 	calls := 0
-	live := func(string) bool { calls++; return true }
+	live := func(store.Status) bool { calls++; return true }
 	Merge([]transcript.Info{{SessionID: "a"}}, map[string]store.Status{"a": {Status: store.StatusEnded, TmuxPane: "%1"}}, nil, live, allDirs)
 	if calls != 0 {
 		t.Errorf("live called %d times for ended session", calls)

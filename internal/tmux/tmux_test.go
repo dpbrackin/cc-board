@@ -4,6 +4,7 @@ import (
 	"errors"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -140,5 +141,38 @@ func TestIsLive(t *testing.T) {
 func TestResumeCommandQuotes(t *testing.T) {
 	if got := ResumeCommand("claude -r {id}", "a b'c"); got != `claude -r 'a b'\''c'` {
 		t.Errorf("got %q", got)
+	}
+}
+
+func TestJumpRunningElsewhere(t *testing.T) {
+	dir := t.TempDir()
+	alive := map[int]bool{4242: true}
+	for _, inTmux := range []bool{true, false} {
+		f := &FakeRunner{Panes: map[string]string{"%1": "claude"}}
+		c := Client{R: f, LiveCommands: []string{"claude"}, InTmux: inTmux, ResumeCommand: "claude --resume {id}",
+			ProcAlive: func(pid int) bool { return alive[pid] }}
+
+		// Running with no pane: never resumed, nothing issued to tmux but the query.
+		_, ex, err := c.Jump(Target{ID: "abc", CWD: dir, PID: 4242})
+		if !errors.Is(err, ErrRunningElsewhere) || ex != nil {
+			t.Errorf("inTmux=%v running elsewhere: err=%v exec=%v", inTmux, err, ex)
+		}
+		for _, cmd := range f.Commands() {
+			if strings.HasPrefix(cmd, "new-window") {
+				t.Errorf("inTmux=%v: unexpected %q", inTmux, cmd)
+			}
+		}
+
+		// A live pane still wins over the process check.
+		if inTmux {
+			if out, _, err := c.Jump(Target{ID: "abc", CWD: dir, Pane: "%1", PID: 4242}); err != nil || out != Switched {
+				t.Errorf("live pane: out=%v err=%v", out, err)
+			}
+		}
+
+		// Process gone: resume as usual.
+		if _, _, err := c.Jump(Target{ID: "abc", CWD: dir, PID: 9999}); err != nil {
+			t.Errorf("inTmux=%v dead process: %v", inTmux, err)
+		}
 	}
 }

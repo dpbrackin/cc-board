@@ -37,6 +37,7 @@ type Session struct {
 	Status         string // display status: NeedsInput, Working, Idle or Closed
 	RawStatus      string // status file value, empty if none
 	Pane           string
+	PID            int // Claude Code process recorded by the hook
 	Live           bool
 	TodoDone       int
 	TodoTotal      int
@@ -116,8 +117,9 @@ func ApplyProgress(sessions []Session, progress map[string]store.Progress) {
 	}
 }
 
-// LiveFunc reports whether a tmux pane is live (exists and runs Claude).
-type LiveFunc func(pane string) bool
+// LiveFunc reports whether the session in a status file is still running:
+// its tmux pane is live, or its Claude Code process is.
+type LiveFunc func(st store.Status) bool
 
 // DirExistsFunc reports whether a directory exists.
 type DirExistsFunc func(dir string) bool
@@ -127,8 +129,8 @@ type DirExistsFunc func(dir string) bool
 //  1. Every transcript is a session; status files without one are ignored.
 //  2. Title = meta label, else first prompt, else "(untitled)".
 //  3. Status comes from the status file; none means closed.
-//  4. Live only if status is not ended, a pane is set, and live(pane) is true;
-//     otherwise the session displays as closed.
+//  4. Live only if status is not ended and live(status) is true (its tmux pane
+//     or its process is running); otherwise the session displays as closed.
 //  5. Progress = completed/total of the latest todo list; ApplyProgress
 //     replaces it with progress the session reported itself.
 //  6. Done = meta done.
@@ -166,13 +168,14 @@ func Merge(infos []transcript.Info, statuses map[string]store.Status, metas map[
 		if hasStatus {
 			s.RawStatus = st.Status
 			s.Pane = st.TmuxPane
+			s.PID = st.PID
 			if s.CWD == "" {
 				s.CWD = st.CWD
 			}
 			if st.UpdatedAt.After(s.UpdatedAt) {
 				s.UpdatedAt = st.UpdatedAt
 			}
-			if st.Status != store.StatusEnded && st.TmuxPane != "" && live != nil && live(st.TmuxPane) {
+			if st.Status != store.StatusEnded && live != nil && live(st) {
 				s.Live = true
 				switch st.Status {
 				case NeedsInput, Working, Idle:

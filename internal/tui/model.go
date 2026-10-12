@@ -369,14 +369,14 @@ func (m Model) saveMetaCmd(id string, fn func(*store.Meta)) tea.Cmd {
 }
 
 func (m Model) target(s session.Session) tmux.Target {
-	return tmux.Target{ID: s.ID, CWD: s.CWD, Pane: s.Pane, Title: s.Title}
+	return tmux.Target{ID: s.ID, CWD: s.CWD, Pane: s.Pane, PID: s.PID, Title: s.Title}
 }
 
 func (m Model) jumpCmd(s session.Session) tea.Cmd {
 	client := m.opt.Client
 	t := m.target(s)
 	if s.RawStatus == store.StatusEnded {
-		t.Pane = "" // an ended session never has a live pane
+		t.Pane, t.PID = "", 0 // an ended session is never running
 	}
 	return func() tea.Msg {
 		out, ex, err := client.Jump(t)
@@ -401,6 +401,8 @@ func friendly(err error) error {
 		return errors.New("not in tmux: can't jump to a live pane (run cc-board inside tmux)")
 	case errors.Is(err, tmux.ErrCWDMissing):
 		return errors.New("project directory no longer exists")
+	case errors.Is(err, tmux.ErrRunningElsewhere):
+		return errors.New("running in another terminal (not tmux): switch to it there")
 	}
 	return err
 }

@@ -20,6 +20,7 @@ import (
 
 	"github.com/dpbrackin/cc-board/internal/config"
 	"github.com/dpbrackin/cc-board/internal/hook"
+	"github.com/dpbrackin/cc-board/internal/proc"
 	"github.com/dpbrackin/cc-board/internal/progress"
 	"github.com/dpbrackin/cc-board/internal/session"
 	"github.com/dpbrackin/cc-board/internal/store"
@@ -115,7 +116,7 @@ func runHook(args []string, stdin io.Reader) int {
 	if err != nil {
 		cfg = config.Default()
 	}
-	hook.Run(cfg.BoardDir(), stdin)
+	hook.Run(cfg.BoardDir(), cfg.LiveCommands, stdin)
 	return 0
 }
 
@@ -162,7 +163,8 @@ Examples:
 			return 1
 		}
 		cwd, _ := os.Getwd()
-		id, err = progress.Resolve(statuses, os.Getenv("TMUX_PANE"), cwd)
+		claude, _ := proc.FindAncestor(nil, os.Getppid(), cfg.LiveCommands)
+		id, err = progress.Resolve(statuses, os.Getenv("TMUX_PANE"), claude.PID, cwd)
 		if err != nil {
 			fmt.Fprintln(stderr, "cc-board:", err)
 			return 1
@@ -199,6 +201,9 @@ func newClient(cfg config.Config) tmux.Client {
 		LiveCommands:  cfg.LiveCommands,
 		InTmux:        tmux.InTmux(),
 		ResumeCommand: cfg.ResumeCommand,
+		ProcAlive: func(pid int) bool {
+			return proc.Alive(nil, pid, cfg.LiveCommands)
+		},
 	}
 }
 
@@ -207,7 +212,12 @@ func newLoader(cfg config.Config, client tmux.Client) *session.Loader {
 		ProjectsDir: cfg.ProjectsDir(),
 		Store:       store.New(cfg.BoardDir()),
 		Cache:       transcript.NewCache(),
-		Live:        client.IsLive,
+		Live: func(st store.Status) bool {
+			if st.TmuxPane != "" && client.IsLive(st.TmuxPane) {
+				return true
+			}
+			return st.PID > 0 && client.ProcAlive(st.PID)
+		},
 	}
 }
 

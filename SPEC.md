@@ -171,6 +171,16 @@ Added after v1. A session can report its own progress, which overrides the todo 
 - Merge: reported progress, when present, sets the bar and label (`60%` or `3/5`) and appends ` · <note>` to the title; otherwise the todo ratio is used. A report also counts as activity for sorting. `done?` shows when progress is 100% and the session is idle.
 - Claude is asked to report via a CLAUDE.md instruction, with `Bash(cc-board progress:*)` in `permissions.allow` so reports don't prompt.
 
+## Without tmux
+
+Added after v1. Liveness no longer depends on tmux.
+
+- The hook records `pid` in the status file: the nearest ancestor process whose name is in `live_commands`, found by walking parent PIDs (`/proc/<pid>/stat` on Linux, `ps -o ppid= -o comm=` elsewhere). It is looked up only on `SessionStart` (a resume starts a new process) or while no PID is recorded, so other events stay cheap.
+- A session is live if its tmux pane runs Claude **or** its recorded process is alive and still has a name in `live_commands` (guards against PID reuse).
+- `enter` on a session that is live by process but has no live pane returns "running in another terminal" and never resumes it, since that would start a second copy. Closed sessions resume as before.
+- `cc-board progress` resolves its session by tmux pane, then by its Claude Code ancestor PID, then by directory.
+- New package: `internal/proc` (process lookup, ancestor walk, liveness), with the lookup behind a `LookupFunc` for tests.
+
 ## TUI
 
 The TUI is one Bubble Tea program: a header with counts, a list of sessions grouped by project, an optional preview pane, and a one-line help footer.

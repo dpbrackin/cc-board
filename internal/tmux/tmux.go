@@ -50,6 +50,9 @@ func InTmux() bool { return os.Getenv("TMUX") != "" }
 var (
 	ErrNotInTmux  = errors.New("not inside tmux: can't jump to a live pane")
 	ErrCWDMissing = errors.New("project directory no longer exists")
+	// ErrRunningElsewhere means the session is still running, but not in a
+	// tmux pane cc-board can switch to. Resuming it would start a second copy.
+	ErrRunningElsewhere = errors.New("session is running in another terminal")
 )
 
 // Client wraps a Runner with cc-board's tmux operations.
@@ -61,6 +64,9 @@ type Client struct {
 	InTmux bool
 	// ResumeCommand is the resume template; {id} is replaced by the session ID.
 	ResumeCommand string
+	// ProcAlive reports whether a session's Claude Code process is still
+	// running. Nil means process checks are skipped.
+	ProcAlive func(pid int) bool
 }
 
 // PaneCommand returns the pane's current command.
@@ -112,6 +118,7 @@ type Target struct {
 	ID    string
 	CWD   string
 	Pane  string
+	PID   int // Claude Code process, 0 if unknown
 	Title string
 }
 
@@ -135,12 +142,17 @@ type ExecSpec struct {
 
 // Jump switches to the session's live pane, or resumes it in a new window.
 // Outside tmux it returns Exec with the resume command for the caller to run.
+// A session whose process is still running outside any live pane is never
+// resumed: Jump returns ErrRunningElsewhere instead.
 func (c Client) Jump(t Target) (Outcome, *ExecSpec, error) {
 	if t.Pane != "" && c.IsLive(t.Pane) {
 		if !c.InTmux {
 			return 0, nil, ErrNotInTmux
 		}
 		return Switched, nil, c.SwitchTo(t.Pane)
+	}
+	if t.PID > 0 && c.ProcAlive != nil && c.ProcAlive(t.PID) {
+		return 0, nil, ErrRunningElsewhere
 	}
 	if !dirExists(t.CWD) {
 		return 0, nil, ErrCWDMissing

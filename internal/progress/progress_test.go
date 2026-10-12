@@ -62,9 +62,11 @@ func TestResolve(t *testing.T) {
 		"ended":    {SessionID: "ended", TmuxPane: "%4", CWD: "/w/web", Status: store.StatusEnded, UpdatedAt: t2},
 		"home":     {SessionID: "home", TmuxPane: "%5", CWD: "/w", Status: store.StatusIdle, UpdatedAt: t2.Add(time.Hour)},
 		"web":      {SessionID: "web", TmuxPane: "%6", CWD: "/w/web", Status: store.StatusIdle, UpdatedAt: t1},
+		"term":     {SessionID: "term", PID: 4242, CWD: "/w/term", Status: store.StatusWorking, UpdatedAt: t1},
 	}
 	tests := []struct {
 		name, pane, cwd, want string
+		pid                   int
 		wantErr               bool
 	}{
 		{name: "pane match, most recent wins", pane: "%3", cwd: "/elsewhere", want: "new-pane"},
@@ -74,10 +76,13 @@ func TestResolve(t *testing.T) {
 		{name: "unknown pane and cwd", pane: "%9", cwd: "/tmp", wantErr: true},
 		{name: "sibling prefix is not inside", cwd: "/w-other", wantErr: true},
 		{name: "nothing to go on", wantErr: true},
+		{name: "process match outside tmux beats cwd", pid: 4242, cwd: "/w/web/src", want: "term"},
+		{name: "pane beats process", pane: "%3", pid: 4242, want: "new-pane"},
+		{name: "unknown process falls back to cwd", pid: 1, cwd: "/w/api", want: "new-pane"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := Resolve(statuses, tt.pane, tt.cwd)
+			got, err := Resolve(statuses, tt.pane, tt.pid, tt.cwd)
 			if tt.wantErr {
 				if !errors.Is(err, ErrNoSession) {
 					t.Fatalf("got %q, %v; want ErrNoSession", got, err)

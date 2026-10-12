@@ -27,7 +27,8 @@ It runs locally and never uses the network.
 
 ## Install
 
-Requires Go 1.22+ and tmux.
+Requires Go 1.22+. tmux is recommended: without it the board and progress
+still work, but you can't jump to a running session (see [Without tmux](#without-tmux)).
 
 ```sh
 go install github.com/dpbrackin/cc-board/cmd/cc-board@latest
@@ -165,8 +166,8 @@ Statuses:
 - **needs you**: Claude is waiting for a permission prompt or input.
 - **working**: Claude is in the middle of a turn.
 - **idle**: Claude finished its turn.
-- **closed**: the session has ended, its pane is gone or now runs something
-  else, or it has no status file.
+- **closed**: the session has ended, its Claude Code process and tmux pane are
+  gone, or it has no status file.
 
 ### Progress
 
@@ -176,9 +177,11 @@ never reports falls back to its task list: completed tasks over total. If it has
 neither, the column is blank.
 
 `cc-board progress` works out which session is calling from `$TMUX_PANE`,
-matched against the pane the hook recorded. Outside tmux it uses the session
-whose directory contains the current directory (the deepest match wins). To
-report for a specific session, pass `-session <id>` before the value:
+matched against the pane the hook recorded. Outside tmux it walks up its
+parent processes to the Claude Code process and matches the PID the hook
+recorded, and as a last resort uses the session whose directory contains the
+current directory (the deepest match wins). To report for a specific session,
+pass `-session <id>` before the value:
 
 ```sh
 cc-board progress 40 writing tests
@@ -191,9 +194,24 @@ Reported progress stays until it is replaced or cleared.
 
 A dim `done?` means progress is at 100% and the session is idle.
 
-Outside tmux, jumping to a live pane is not possible. Resume and open still
-work: the TUI exits and replaces itself with the resume command or `$SHELL`,
-started in the session's directory.
+### Without tmux
+
+cc-board works in any terminal, with one limit: it can't switch you to a
+session that is still running, because only tmux lets one program focus
+another pane. Everything else works:
+
+| | In tmux | Without tmux |
+| --- | --- | --- |
+| List, status badges, progress | yes | yes |
+| `enter` on a running session | switches to its pane | says it's running in another terminal; switch to it there |
+| `enter` on a closed session | resumes it in a new window | the board exits and resumes it in the current terminal |
+| `o` | opens a new window in the session's directory | the board exits and opens `$SHELL` there |
+| `cc-board progress` finds its session by | tmux pane | Claude Code process, then current directory |
+
+The hook records the Claude Code process ID when a session starts. The board
+treats a session as running while either its tmux pane runs Claude or that
+process is still alive (and still named `claude` or `node`, so a reused PID
+doesn't count).
 
 ## Configuration
 
@@ -215,14 +233,14 @@ default.
 | `claude_dir` | `$CLAUDE_CONFIG_DIR` or `~/.claude` | Where transcripts and the board folder live |
 | `poll_interval` | `"2s"` | TUI refresh interval |
 | `hide_closed_after` | `"168h"` | Hide closed sessions older than this (`"0s"` never hides them) |
-| `live_commands` | `["claude", "node"]` | Pane commands that count as a running session |
+| `live_commands` | `["claude", "node"]` | Process names that count as Claude Code (for panes and PIDs) |
 | `resume_command` | `"claude --resume {id}"` | Command for resuming a closed session |
 
 ## Files
 
 | Path | Written by | Contents |
 | --- | --- | --- |
-| `~/.claude/board/sessions/<id>.json` | hook | status, cwd, tmux pane, timestamps |
+| `~/.claude/board/sessions/<id>.json` | hook | status, cwd, tmux pane, Claude Code PID, timestamps |
 | `~/.claude/board/meta/<id>.json` | TUI | your label, done and hidden flags |
 | `~/.claude/board/progress/<id>.json` | `cc-board progress` | reported percent, optional done/total, note, timestamp |
 | `~/.claude/board/hook.log` | hook | errors only |

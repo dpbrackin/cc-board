@@ -2,9 +2,10 @@
 // itself) reports how far along its task is, with an optional short note.
 //
 // The calling session is found from $TMUX_PANE, matched against the pane the
-// hook recorded in each status file. Outside tmux it falls back to the most
-// recently active session whose directory contains the current directory.
-// An explicit session ID always wins.
+// hook recorded in each status file, then from the Claude Code process that ran
+// the command (matched against the PID the hook recorded), and finally from the
+// session whose directory contains the current directory. An explicit session
+// ID always wins.
 package progress
 
 import (
@@ -58,26 +59,38 @@ func CleanNote(note string) string {
 
 // ErrNoSession means the calling session could not be identified.
 var ErrNoSession = errors.New("could not tell which Claude Code session this is; " +
-	"run it from inside the session's tmux pane, or pass -session <id> " +
+	"run it from inside the session (its terminal or tmux pane), or pass -session <id> " +
 	"(the cc-board hook must be installed so sessions are recorded)")
 
-// Resolve finds the session ID for the caller. pane is $TMUX_PANE and cwd is
-// the current directory; either may be empty. Sessions that have ended are
-// skipped, and the most recently updated match wins (pane IDs are reused).
-func Resolve(statuses map[string]store.Status, pane, cwd string) (string, error) {
+// Resolve finds the session ID for the caller. pane is $TMUX_PANE, pid is the
+// Claude Code process the caller runs under, and cwd is the current directory;
+// any may be empty or 0. They are tried in that order. Sessions that have
+// ended are skipped, and the most recently updated match wins (pane IDs and
+// PIDs are reused).
+func Resolve(statuses map[string]store.Status, pane string, pid int, cwd string) (string, error) {
 	var best store.Status
 	found := false
 	consider := func(st store.Status) {
 		if st.Status == store.StatusEnded {
 			return
 		}
-		if !found || st.UpdatedAt.After(best.UpdatedAt) {
+		if !found || newer(st, best) {
 			best, found = st, true
 		}
 	}
 	if pane != "" {
 		for _, st := range statuses {
 			if st.TmuxPane == pane {
+				consider(st)
+			}
+		}
+		if found {
+			return best.SessionID, nil
+		}
+	}
+	if pid > 0 {
+		for _, st := range statuses {
+			if st.PID == pid {
 				consider(st)
 			}
 		}
@@ -94,7 +107,7 @@ func Resolve(statuses map[string]store.Status, pane, cwd string) (string, error)
 				continue
 			}
 			d := len(filepath.Clean(st.CWD))
-			if d > depth || (d == depth && st.UpdatedAt.After(best.UpdatedAt)) {
+			if d > depth || (d == depth && newer(st, best)) {
 				best, depth, found = st, d, true
 			}
 		}
@@ -103,6 +116,15 @@ func Resolve(statuses map[string]store.Status, pane, cwd string) (string, error)
 		}
 	}
 	return "", ErrNoSession
+}
+
+// newer orders candidates: most recently updated first, then by session ID so
+// the result never depends on map iteration order.
+func newer(a, b store.Status) bool {
+	if !a.UpdatedAt.Equal(b.UpdatedAt) {
+		return a.UpdatedAt.After(b.UpdatedAt)
+	}
+	return a.SessionID < b.SessionID
 }
 
 // within reports whether dir is base or inside it.

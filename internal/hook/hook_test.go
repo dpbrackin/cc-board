@@ -33,7 +33,7 @@ func runCapturingStdout(t *testing.T, boardDir string, in []byte) string {
 	}
 	old := os.Stdout
 	os.Stdout = w
-	Run(boardDir, bytes.NewReader(in))
+	Run(boardDir, nil, bytes.NewReader(in))
 	os.Stdout = old
 	w.Close()
 	out, _ := io.ReadAll(r)
@@ -137,5 +137,44 @@ func TestUnknownFieldsAndOutsideTmux(t *testing.T) {
 	st, ok, _ := store.New(board).ReadStatus("abc")
 	if !ok || st.Status != store.StatusWorking || st.TmuxPane != "" || st.StartedAt.IsZero() {
 		t.Errorf("got %+v ok=%v", st, ok)
+	}
+}
+
+func TestClaudePIDRecordedOnSessionStartOnly(t *testing.T) {
+	s := store.New(filepath.Join(t.TempDir(), "board"))
+	calls := 0
+	pid := 4242
+	h := &Handler{Store: s, ClaudePID: func() int { calls++; return pid }}
+	for _, name := range []string{"session_start.json", "user_prompt_submit.json", "post_tool_use.json", "stop.json"} {
+		if err := h.Handle(bytes.NewReader(payload(t, name))); err != nil {
+			t.Fatal(err)
+		}
+	}
+	st, _, _ := s.ReadStatus(sid)
+	if st.PID != 4242 {
+		t.Errorf("pid = %d, want 4242", st.PID)
+	}
+	if calls != 1 {
+		t.Errorf("ClaudePID called %d times, want 1 (SessionStart only)", calls)
+	}
+	// A resume starts a new process: SessionStart records the new PID.
+	pid = 5151
+	if err := h.Handle(bytes.NewReader(payload(t, "session_start.json"))); err != nil {
+		t.Fatal(err)
+	}
+	if st, _, _ = s.ReadStatus(sid); st.PID != 5151 {
+		t.Errorf("after resume pid = %d, want 5151", st.PID)
+	}
+}
+
+func TestClaudePIDRetriedWhenMissing(t *testing.T) {
+	s := store.New(filepath.Join(t.TempDir(), "board"))
+	pid := 0
+	h := &Handler{Store: s, ClaudePID: func() int { return pid }}
+	h.Handle(bytes.NewReader(payload(t, "session_start.json")))
+	pid = 77
+	h.Handle(bytes.NewReader(payload(t, "user_prompt_submit.json")))
+	if st, _, _ := s.ReadStatus(sid); st.PID != 77 {
+		t.Errorf("pid = %d, want 77 (filled in on a later event)", st.PID)
 	}
 }
