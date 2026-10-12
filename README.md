@@ -35,6 +35,35 @@ go install github.com/dpbrackin/cc-board/cmd/cc-board@latest
 
 Or from a checkout: `make install` (or `make build` for `./cc-board`).
 
+Then follow steps 1–4 below, or let Claude Code do the whole setup for you.
+
+### Let Claude Code install it
+
+Paste this into a Claude Code session. Claude asks permission before each
+command and file edit, so you can check every change it makes.
+
+```
+Install cc-board from https://github.com/dpbrackin/cc-board and set it up,
+following the README there (fetch it first).
+
+1. Check Go is installed. If not, stop and tell me.
+2. Run: go install github.com/dpbrackin/cc-board/cmd/cc-board@latest
+   Make sure ~/go/bin is on my PATH; if not, tell me which shell profile line to add.
+3. Merge the README's hooks block into ~/.claude/settings.json. Keep every existing
+   setting and hook. Use the absolute path to the cc-board binary in the hook commands.
+4. Add "Bash(cc-board progress:*)" to permissions.allow in the same file.
+5. Append the README's "Progress reporting" section to ~/.claude/CLAUDE.md.
+6. Add the popup binding to ~/.tmux.conf (unless prefix+C is already bound;
+   if so, ask me which key to use), then run tmux source-file ~/.tmux.conf.
+7. Back up each file before editing it (e.g. settings.json.bak).
+8. Show me a summary of every change.
+```
+
+Hooks load when a session starts, so restart your Claude Code sessions
+afterwards, including the one that did the install. To check it worked, start a
+new session in tmux, give it a task, and press `prefix C`: it should show as
+**working**, then **idle** when it finishes.
+
 ### 1. Register the hooks
 
 Merge this into `~/.claude/settings.json`. If you already have a `hooks` key, add
