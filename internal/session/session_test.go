@@ -56,6 +56,17 @@ func TestMerge(t *testing.T) {
 			want:   func(s Session) bool { return s.Title == "Label" && s.Done && s.Hidden && s.Status == Idle },
 		},
 		{
+			name: "AI title wins over prompt",
+			info: transcript.Info{SessionID: "a", FirstPrompt: "Prompt", AITitle: "AI title"},
+			want: func(s Session) bool { return s.Title == "AI title" },
+		},
+		{
+			name: "label wins over AI title",
+			info: transcript.Info{SessionID: "a", FirstPrompt: "Prompt", AITitle: "AI title"},
+			meta: store.Meta{Label: "Label"},
+			want: func(s Session) bool { return s.Title == "Label" },
+		},
+		{
 			name:   "ended is closed even with live pane",
 			info:   transcript.Info{SessionID: "a"},
 			status: &store.Status{SessionID: "a", Status: store.StatusEnded, TmuxPane: "%1"},

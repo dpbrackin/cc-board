@@ -327,14 +327,7 @@ func (m Model) updateRename(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.renaming = ""
 		m.patch(id, func(x *session.Session) {
 			x.Label = label
-			switch {
-			case label != "":
-				x.Title = label
-			case x.FirstPrompt != "":
-				x.Title = x.FirstPrompt
-			default:
-				x.Title = session.Untitled
-			}
+			x.SetTitle()
 		})
 		return m, m.saveMetaCmd(id, func(mt *store.Meta) { mt.Label = label })
 	}

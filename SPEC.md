@@ -118,7 +118,7 @@ The transcript format is internal to Claude Code and may change. The parser must
 ### Merge rules
 
 1. Every transcript is a session. A status file with no transcript is ignored.
-2. Title = meta `label`, else first prompt, else `(untitled)`.
+2. Title = meta `label`, else the latest `ai-title` entry Claude Code wrote to the transcript, else first prompt, else `(untitled)`.
 3. Status comes from the status file. With no status file (sessions from before the hook was installed), status is `closed`.
 4. A session is **live** only if its status is not `ended`, `tmux_pane` is set, and that pane exists and runs Claude (see Jump). Otherwise it displays as `closed`.
 5. Progress = completed / total of the latest todo list; blank if there is none.

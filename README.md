@@ -152,7 +152,7 @@ All commands accept `-config <path>`.
 | --- | --- |
 | `enter` | Jump to the live pane, or resume the session in a new window (`claude --resume <id>`) |
 | `o` | Open a plain shell window in the session's directory |
-| `r` | Rename the task (enter saves, esc cancels, empty resets to the first prompt) |
+| `r` | Rename the task (enter saves, esc cancels, empty resets to the AI title or first prompt) |
 | `d` | Toggle done (✓, sorts to the bottom of its group) |
 | `x` | Toggle hidden |
 | `a` | Show all, including hidden and old closed sessions |

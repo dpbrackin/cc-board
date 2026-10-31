@@ -41,6 +41,7 @@ type Info struct {
 	SessionID     string
 	CWD           string
 	FirstPrompt   string    // first real user prompt, truncated to TitleMax
+	AITitle       string    // latest title Claude Code generated for the session
 	TodoDone      int       // completed todos in the latest list
 	TodoTotal     int       // total todos in the latest list (0 = no list)
 	LastActivity  time.Time // last timestamp, or file mtime
@@ -60,6 +61,7 @@ type entry struct {
 	IsSidechain bool            `json:"isSidechain"`
 	Message     json.RawMessage `json:"message"`
 	ToolResult  json.RawMessage `json:"toolUseResult"`
+	AITitle     string          `json:"aiTitle"`
 }
 
 type message struct {
@@ -182,6 +184,12 @@ func (p *parser) line(b []byte) {
 		}
 	}
 	if e.IsSidechain {
+		return
+	}
+	if e.Type == "ai-title" {
+		if t := strings.Join(strings.Fields(e.AITitle), " "); t != "" {
+			p.info.AITitle = Truncate(t, TitleMax)
+		}
 		return
 	}
 	if p.info.CWD == "" && e.CWD != "" {

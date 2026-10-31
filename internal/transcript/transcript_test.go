@@ -143,6 +143,21 @@ func TestParseNoTrailingNewline(t *testing.T) {
 	}
 }
 
+func TestParseAITitleLatestWins(t *testing.T) {
+	in := `{"type":"user","message":{"role":"user","content":"fix the thing please"}}
+{"type":"ai-title","aiTitle":"First title","sessionId":"s"}
+{"type":"ai-title","aiTitle":"  Better   title ","sessionId":"s"}
+{"type":"ai-title","aiTitle":"","sessionId":"s"}
+`
+	info, _ := Parse(strings.NewReader(in))
+	if info.AITitle != "Better title" {
+		t.Errorf("AITitle = %q", info.AITitle)
+	}
+	if info.FirstPrompt != "fix the thing please" {
+		t.Errorf("FirstPrompt = %q", info.FirstPrompt)
+	}
+}
+
 func TestTodoWriteReplacesTaskList(t *testing.T) {
 	in := `{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"a","name":"TaskCreate","input":{"subject":"s"}}]}}
 {"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"b","name":"TodoWrite","input":{"todos":[{"content":"x","status":"completed"},{"content":"y","status":"pending"}]}}]}}

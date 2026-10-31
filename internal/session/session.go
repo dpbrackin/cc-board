@@ -33,6 +33,7 @@ type Session struct {
 	Title          string
 	Label          string // meta label
 	FirstPrompt    string
+	AITitle        string
 	CWD            string
 	Status         string // display status: NeedsInput, Working, Idle or Closed
 	RawStatus      string // status file value, empty if none
@@ -49,6 +50,20 @@ type Session struct {
 	CWDMissing     bool
 	LastAssistant  string
 	TranscriptPath string
+}
+
+// SetTitle derives Title from the label, the AI title and the first prompt.
+func (s *Session) SetTitle() {
+	switch {
+	case s.Label != "":
+		s.Title = s.Label
+	case s.AITitle != "":
+		s.Title = s.AITitle
+	case s.FirstPrompt != "":
+		s.Title = s.FirstPrompt
+	default:
+		s.Title = Untitled
+	}
 }
 
 // Project is the group name: the basename of the cwd.
@@ -127,7 +142,7 @@ type DirExistsFunc func(dir string) bool
 // Merge builds sessions from transcripts, status and meta files.
 //
 //  1. Every transcript is a session; status files without one are ignored.
-//  2. Title = meta label, else first prompt, else "(untitled)".
+//  2. Title = meta label, else AI title, else first prompt, else "(untitled)".
 //  3. Status comes from the status file; none means closed.
 //  4. Live only if status is not ended and live(status) is true (its tmux pane
 //     or its process is running); otherwise the session displays as closed.
@@ -146,6 +161,7 @@ func Merge(infos []transcript.Info, statuses map[string]store.Status, metas map[
 			ID:             in.SessionID,
 			Label:          meta.Label,
 			FirstPrompt:    in.FirstPrompt,
+			AITitle:        in.AITitle,
 			CWD:            in.CWD,
 			TodoDone:       in.TodoDone,
 			TodoTotal:      in.TodoTotal,
@@ -157,14 +173,7 @@ func Merge(infos []transcript.Info, statuses map[string]store.Status, metas map[
 			TranscriptPath: in.Path,
 			Status:         Closed,
 		}
-		switch {
-		case meta.Label != "":
-			s.Title = meta.Label
-		case in.FirstPrompt != "":
-			s.Title = in.FirstPrompt
-		default:
-			s.Title = Untitled
-		}
+		s.SetTitle()
 		if hasStatus {
 			s.RawStatus = st.Status
 			s.Pane = st.TmuxPane
